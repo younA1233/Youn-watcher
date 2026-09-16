@@ -1,0 +1,40 @@
+name: Check CROUS Grenoble
+
+on:
+  schedule:
+    # Toutes les heures. GitHub Actions ne garantit pas la minute exacte
+    # en période de forte charge, mais le script tourne ~55 min en continu
+    # donc la couverture reste quasi ininterrompue.
+    - cron: "0 * * * *"
+  workflow_dispatch: {}   # permet de lancer le job manuellement pour tester
+
+permissions:
+  contents: write   # nécessaire pour committer seen.json automatiquement
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Installer les dépendances
+        run: pip install -r requirements.txt
+
+      - name: Lancer la surveillance
+        env:
+          CROUS_SEARCH_URL: ${{ secrets.CROUS_SEARCH_URL }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: python check_crous.py
+
+      - name: Sauvegarder l'état (seen.json)
+        run: |
+          git config user.name "crous-watcher-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add seen.json
+          git diff --staged --quiet || git commit -m "update seen.json [skip ci]"
+          git push
